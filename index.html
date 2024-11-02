@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tile Click Game</title>
+    <meta name="description" content="Play the Tile Click Game! Find the hidden target tile by clicking on tiles and revealing distances. Can you beat the high score?">
+    <meta property="og:title" content="Tile Click Game">
+    <meta property="og:description" content="Click tiles to find the hidden target! Keep track of your attempts and aim for the best score!">
+    <meta property="og:image" content="URL_TO_YOUR_IMAGE"> <!-- Replace with the actual image URL -->
+    <meta property="og:url" content="URL_TO_YOUR_GAME"> <!-- Replace with your game's URL -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Tile Click Game">
+    <meta name="twitter:description" content="Can you find the hidden target tile? Click tiles and reveal distances to improve your score!">
+    <meta name="twitter:image" content="URL_TO_YOUR_IMAGE"> <!-- Replace with the actual image URL -->
+    <style>
+        body {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            height: 100vh;
+            margin: 0;
+            background-color: #282c34;
+            color: white;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        .help-container {
+            width: 20%;
+            padding: 20px;
+            background-color: #3b3f47;
+            border-right: 2px solid #61dafb;
+            height: 100vh;
+            overflow: auto;
+        }
+        .message {
+            margin-top: 10px;
+            font-size: 18px;
+            text-align: center;
+        }
+        .game-container {
+            width: 80vw;
+            height: 80vh;
+            overflow: hidden;
+            border: 2px solid #61dafb;
+            position: relative;
+            background-color: #333;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(100, 20px); /* 100 tiles per row */
+            grid-template-rows: repeat(100, 20px); /* 100 tiles per column */
+            transform-origin: top left;
+            transition: transform 0.3s;
+        }
+        .tile {
+            width: 20px;
+            height: 20px;
+            background-color: #444;
+            border: 1px solid #21a1f1;
+            cursor: pointer;
+            color: black;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.3s;
+        }
+        .tile.clicked {
+            background-color: white;
+        }
+        .tile.gray {
+            background-color: gray; /* Gray for previously clicked tiles */
+        }
+        .highscore {
+            font-size: 18px;
+            margin-top: 20px;
+            text-align: center;
+        }
+        .easy-button {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #61dafb;
+            color: #282c34;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+            text-align: center;
+            display: block; /* Center the button */
+            text-decoration: none; /* Remove underline from links */
+        }
+        .easy-button:hover {
+            background-color: #21a1f1;
+        }
+        .credits {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 14px;
+            color: #ccc;
+        }
+    </style>
+</head>
+<body>
+    <div class="help-container">
+        <h2>Game Controls</h2>
+        <p>Click on the tiles to reveal the distance to the hidden target tile.</p>
+        <p>Only one tile can be active at a time. The previous tile will turn gray when you click a new tile.</p>
+        <p>If you find the target, a path will be drawn in different colors showing your clicks.</p>
+        <p>Use your mouse wheel to zoom in and out.</p>
+        <p>Click and drag to pan around the grid.(mid mouse button)</p>
+        <div class="highscore" id="highscore">High Score: <span id="highscoreValue">∞</span></div>
+        <a href="easy" class="easy-button">Easy Version</a> <!-- Link to Easy Version -->
+        <div class="credits">Created by Blubl</div> <!-- Add your credit here -->
+    </div>
+    <div class="game-container" id="game-container">
+        <div class="grid" id="grid"></div>
+        <div class="message" id="message">Find the hidden target tile!</div>
+    </div>
+    <button onclick="resetZoom()">Reset Zoom</button>
+
+    <script>
+        const grid = document.getElementById('grid');
+        const message = document.getElementById('message');
+        const gameContainer = document.getElementById('game-container');
+        const highscoreValue = document.getElementById('highscoreValue');
+
+        let activeTile = null;
+        let targetTileIndex = Math.floor(Math.random() * 10000); // Random target tile index (0 to 9999)
+        let attempts = 0;
+        let scale = 1;
+        let panX = 0;
+        let panY = 0;
+        let clickedTiles = []; // Array to store clicked tile indices
+        let highScore = localStorage.getItem('highScore') ? parseInt(localStorage.getItem('highScore')) : Infinity; // Track the high score (least attempts)
+
+        // Display the high score
+        if (highScore < Infinity) {
+            highscoreValue.textContent = highScore;
+        }
+
+        // Helper function to calculate distance between two tiles in the grid
+        function calculateDistance(index1, index2) {
+            const x1 = index1 % 100;
+            const y1 = Math.floor(index1 / 100);
+            const x2 = index2 % 100;
+            const y2 = Math.floor(index2 / 100);
+            return Math.abs(x1 - x2) + Math.abs(y1 - y2); // Manhattan distance
+        }
+
+        // Create 10,000 tiles (100x100 grid)
+        for (let i = 0; i < 10000; i++) {
+            const tile = document.createElement('div');
+            tile.classList.add('tile');
+
+            // Add click event listener
+            tile.addEventListener('click', () => {
+                attempts++;
+
+                // If there's an active tile, mark it gray
+                if (activeTile) {
+                    activeTile.classList.remove('clicked');
+                    activeTile.classList.add('gray');
+                }
+
+                // Set the clicked tile as the active one and calculate distance
+                tile.classList.add('clicked');
+                activeTile = tile;
+
+                // Calculate and display the distance to the target tile
+                const distance = calculateDistance(i, targetTileIndex);
+                tile.textContent = distance;
+
+                // Store the index of the clicked tile
+                clickedTiles.push(i);
+
+                // Check if the clicked tile is the target tile
+                if (i === targetTileIndex) {
+                    message.textContent = `You found the target in ${attempts} attempts!`;
+                    drawPath();
+                    grid.querySelectorAll('.tile').forEach(tile => tile.style.pointerEvents = 'none'); // Disable further clicks
+
+                    // Update the high score if this attempt is lower
+                    if (attempts < highScore) {
+                        highScore = attempts;
+                        highscoreValue.textContent = attempts; // Display new high score
+                        localStorage.setItem('highScore', highScore); // Save new high score in localStorage
+                    }
+                }
+            });
+
+            grid.appendChild(tile);
+        }
+
+        // Function to draw the path over the clicked tiles with different colors
+        function drawPath() {
+            const numTiles = clickedTiles.length;
+            clickedTiles.forEach((index, order) => {
+                const tile = grid.children[index];
+                if (tile) {
+                    // Set color based on the order of clicks
+                    const color = `hsl(${(order / numTiles) * 360}, 100%, 50%)`; // Use HSL color to vary colors
+                    tile.style.backgroundColor = color;
+                }
+            });
+        }
+
+        // Zoom functionality
+        gameContainer.addEventListener("wheel", (event) => {
+            event.preventDefault();
+            scale += event.deltaY * -0.001;
+            scale = Math.min(Math.max(0.5, scale), 2); // Limit zoom scale between 0.5x and 2x
+            grid.style.transform = `scale(${scale}) translate(${panX}px, ${panY}px)`;
+        });
+
+        // Pan functionality
+        let isPanning = false;
+        let startX, startY;
+
+        gameContainer.addEventListener("mousedown", (event) => {
+            isPanning = true;
+            startX = event.clientX - panX;
+            startY = event.clientY - panY;
+        });
+
+        gameContainer.addEventListener("mousemove", (event) => {
+            if (!isPanning) return;
+            panX = event.clientX - startX;
+            panY = event.clientY - startY;
+            grid.style.transform = `scale(${scale}) translate(${panX}px, ${panY}px)`;
+        });
+
+        gameContainer.addEventListener("mouseup", () => {
+            isPanning = false;
+        });
+
+        // Reset zoom functionality
+        function resetZoom() {
+            scale = 1;
+            panX = 0;
+            panY = 0;
+            grid.style.transform = `scale(${scale}) translate(${panX}px, ${panY}px)`;
+        }
+    </script>
+</body>
+</html>
